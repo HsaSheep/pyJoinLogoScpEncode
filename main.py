@@ -245,7 +245,7 @@ def run_avi_utl_controller(target_file_path):
         res = re.findall(pattern, mp4_filename)
         mp4_filename = mp4_filename.replace(res[0], '')
         # 日付を削除したことにより、先頭の文字が下記になった場合、該当しなくなるまで削除
-        pattern = ['-', ' ']
+        pattern = ['-', '_', ' ']
         count = 0
         while count <= len(pattern):
             for pat in pattern:
@@ -254,11 +254,7 @@ def run_avi_utl_controller(target_file_path):
                     count = 0
                 else:
                     count += 1
-        print(mp4_filepath)
-        print(mp4_filename)
-        print(mp4_filename_tmp)
         mp4_filepath = mp4_filepath[:-1*len(mp4_filename_tmp)] + mp4_filename
-        print(mp4_filepath)
         print(".mp4ファイル名から日付を削除しました。 : " + os.path.basename(mp4_filepath))
     mp4_filepath += ".mp4"
     exe_dir = config['Path']['avi_utl_controller']
@@ -271,6 +267,7 @@ def run_avi_utl_controller(target_file_path):
                     mp4_filepath.replace('/', chr(ord('\\')))])
     subprocess.run([exe_dir + "/auc_wait.exe", w_id])
     subprocess.run([exe_dir + "/auc_close.exe", w_id])
+    subprocess.run([exe_dir + "/auc_exit.exe", w_id])
     print("エンコード終了。")
 
 
@@ -279,13 +276,15 @@ def run_jlscp_auc(target_files_path):
     total = len(target_files_path)
     for i, filepath in enumerate(target_files_path):
         filepath = file_rename(filepath)
-        #notifire_encode_start(os.path.splitext(os.path.basename(filepath))[0], i+1, total)
-        #run_join_logo_scp(filepath)
+        notifire_encode_start(os.path.splitext(os.path.basename(filepath))[0], i+1, total)
+        run_join_logo_scp(filepath)
         avs_filepath = file_path2avs_path(filepath)
         run_avi_utl_controller(avs_filepath)
 
 
 # ### メイン関係 ###
+# Todo: tkinter Main画面
+# Todo: tkinter line設定、パス更新、ファイル選択、ファイルリスト表示、ファイルリストクリア、実行、コンフィグ表示、resultフォルダ表示
 if __name__ == '__main__':
     config_check()
     path_check()
@@ -296,6 +295,8 @@ if __name__ == '__main__':
     if argc == 1:
         files_path = select_target_files()
         if not files_path == "":
+            print("ファイルを選択しました。")
+            print(files_path)
             run_jlscp_auc(files_path)
     else:
         print("引数あり")
