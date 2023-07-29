@@ -3,9 +3,9 @@ import os
 import sys
 import re
 import datetime
-# import threading
 import subprocess
 import configparser
+import threading
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -90,6 +90,24 @@ def config_plugin_no(number=str(0)):
         psl("出力プラグインは整数を入力してください。現在値: " + config.get('Auc', 'enc_plugin_no'))
 
 
+def config_key_define_check(section="", key=""):
+    if (section == "") or (key == ""):
+        psl("コンフィグのセクション、キーチェックに空白が入力されました")
+        return bool(False)
+    if key in map(lambda x: x[0], config.items(section)):
+        return bool(True)
+    else:
+        return bool(False)
+
+
+def config_key_update(section="", old_key="", new_key=""):
+    if config_key_define_check(section, old_key) is True:
+        if not new_key == "":
+            psl("コンフィグを更新します: [" + section + "],[" + old_key + "]->[" + section + "],[" + new_key + "]")
+            config.set(section, new_key, config.get(section, old_key))
+        config.remove_option(section, old_key)
+
+
 def config_check():
     is_file = os.path.isfile(CONF_PATH)
     if is_file:
@@ -110,6 +128,9 @@ def config_check():
         config.read_dict(default_configs)
         config.read(CONF_PATH)
         config.set('My', 'ver', str(EXE_VER))
+        # 変更チェック->書き換え部分
+        config_key_update('Rename', 'date_delete', 'mp4_filename_date_delete')
+        config_key_update('Line', 'key', 'token')
         save_config()
     else:
         psl('コンフィグを読み込みました('+my.get('ver')+')')
@@ -146,7 +167,8 @@ def path_check():
         psl("パスのチェック完了。")
         save_config()
     else:
-        path_check()
+        print("パスのチェックに失敗しました。終了します")
+        exit()
 
 
 # ### 処理状況通知関係 ###
@@ -413,7 +435,7 @@ class Application(tkinter.Frame):
         self.button_select = ttk.Button(self.label_f_run, text='ファイル選択', command=lambda: self.tk_select_files())
         self.button_clear = ttk.Button(self.label_f_run, text='選択したファイルを除外', command=lambda: self.tk_files_list_select_clear())
         self.button_clear_all = ttk.Button(self.label_f_run, text='全ファイルを除外', command=lambda: self.tk_files_list_all_clear())
-        self.button_run = ttk.Button(self.label_f_run, text='実行', command=lambda: self.tk_run_jlscp_auc())
+        self.button_run = ttk.Button(self.label_f_run, text='実行', command=lambda: self.tk_thread_jls_auc_running())
         self.tk_files_list_all_clear()
         self.sep_run_open = ttk.Separator(self.frame_ctrl, orient="horizontal")
         self.label_f_open = ttk.LabelFrame(self.frame_ctrl, text='エクスプローラで表示', relief="sunken", labelanchor="n")
@@ -456,12 +478,16 @@ class Application(tkinter.Frame):
         if config.getboolean('Line', 'enable') == bool(True):
             self.button_line.configure(state='disable')
 
+        # スレッド宣言
+        self.thread_run_jls_auc_for_tk = threading.Thread(target=self.run_jlscp_auc_for_tk, daemon=True)
+        self.thread_run_jls_auc_for_tk_finish_check = threading.Thread(target=self.run_jlscp_auc_for_tk_finish_check, daemon=True)
+
         # 初期化完了
         self.tk_l_status_var.set("初期化完了")
 
     def tk_line_token_window(self):
         self.tk_l_status_var.set("Line Token設定")
-        tkl_root = Tk()
+        tkl_root = Toplevel()
         tkl_root.title('Lineのトークンを入力してください')
         # 文字入力欄
         tkl_frame = ttk.Frame(tkl_root, padding=(75, 2))
@@ -500,7 +526,16 @@ class Application(tkinter.Frame):
             self.listbox_files.insert(self.listbox_files.size(), st)
 
     def tk_filecount_update(self, files_list):
-        self.tk_l_filecount.set(str(len(files_list)) + "ファイル")
+        count = len(files_list)
+        self.tk_l_filecount.set(str(count) + "ファイル")
+        if count > 0:
+            self.button_clear.config(state="enable")
+            self.button_clear_all.config(state="enable")
+            self.button_run.config(state="enable")
+        else:
+            self.button_clear.config(state="disable")
+            self.button_clear_all.config(state="disable")
+            self.button_run.config(state="disable")
 
     def tk_progress_add(self, int_val):
         self.tk_p_var.set(self.tk_p_var.get() + int_val)
@@ -534,7 +569,7 @@ class Application(tkinter.Frame):
         self.listbox_files.delete(0, tkinter.END)
         self.tk_filecount_update([])
 
-    def tk_run_jlscp_auc(self):
+    def run_jlscp_auc_for_tk(self):
         target_files_path = list(self.listbox_files.get(0, tkinter.END))
         self.tk_progress_init()
         total = len(target_files_path)
@@ -565,29 +600,36 @@ class Application(tkinter.Frame):
         self.tk_progress_add(100 - self.tk_p_var.get())
         self.tk_l_status_var.set("全" + str(total) + "処理完了")
 
-    def tk_running(self):
+    def tk_thread_jls_auc_running(self):
         if self.listbox_files.size() > 0:
+            self.button_select.config(state="disable")
             self.button_clear.config(state="disable")
             self.button_clear_all.config(state="disable")
             self.button_run.config(state="disable")
-            self.tk_run_jlscp_auc()
+            self.thread_run_jls_auc_for_tk.start()
+            self.thread_run_jls_auc_for_tk_finish_check.start()
 
-    def tk_finish(self):
+    def run_jlscp_auc_for_tk_finish_check(self):
+        self.thread_run_jls_auc_for_tk.join()
+        self.button_select.config(state="enable")
         self.button_clear.config(state="enable")
         self.button_clear_all.config(state="enable")
         self.button_run.config(state="enable")
 
-    @staticmethod
-    def tk_open_folder(folder_path=""):
+    def tk_open_folder(self, folder_path=""):
         if folder_path == "":
             folder_path = str(os.path.dirname(config['Path']['join_logo_scp']))
             folder_path += "/result"
             folder_path = folder_path.replace('/', chr(ord('\\')))
         if not os.path.isabs(folder_path):
             folder_path = os.path.abspath(folder_path)
-        folder_path += chr(ord('\\'))
-        psl(folder_path)
-        os.system('explorer.exe "%s"' % folder_path)
+        if os.path.isdir(folder_path):
+            folder_path += chr(ord('\\'))
+            # psl(folder_path)
+            os.system('explorer.exe "%s"' % folder_path)
+        else:
+            psl("フォルダが存在しません: " + str(folder_path))
+            self.tk_l_status_var.set("フォルダが存在しません")
 
 
 # ### メイン関係 ###
