@@ -43,7 +43,7 @@
 　![main_window.png](img%2Fmain_window.png)
 * Tokenを入力(Ctrl+Vで貼り付けも可)し、OKをクリック。その後閉じてください。
 　![line_token_window.png](img%2Fline_token_window.png)
-※一度設定すると、再度開くことはできません。下記を参考に手動でconfig.iniを編集してください。
+* 一度設定すると、再度開くことはできません。下記を参考に手動でconfig.iniを編集してください。
 
 #### 設定方法(config.ini書き換え)
 * 本ツールを1度でも起動すると作成されるconf/config.iniをテキストエディタで開きます。
