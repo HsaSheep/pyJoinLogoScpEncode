@@ -3,7 +3,7 @@ import os
 import sys
 import re
 import datetime
-import threading
+# import threading
 import subprocess
 import configparser
 import urllib.parse
@@ -15,22 +15,19 @@ from tkinter import ttk
 from tkinter import filedialog
 
 import values
-
-ver = values.EXE_VER
+EXE_VER = values.EXE_VER
+EXE_NAME_VER = values.EXE_NAME_VER
 CONF_PATH = 'conf/config.ini'
 config = configparser.ConfigParser()
 DATE_TIME = datetime.datetime.now()
 LOG_FOLDER = 'log/'
 LOG_FILENAME = DATE_TIME.strftime('%Y%m%d_%H%M%S') + ".log"
-selected_files_list = []
-line_token = ""
-tk_enable = False
 
 
 default_configs = {
     'My':
         {
-            'ver': str(ver),
+            'ver': str(EXE_VER),
             'enable': str(bool(False))
         },
     'Path':
@@ -107,12 +104,12 @@ def config_check():
         psl('初期値で作成します。')
         config.set('My', 'enable', str(bool(True)))
         save_config()
-    elif my.getfloat('ver') < ver:
+    elif my.getfloat('ver') < EXE_VER:
         psl('コンフィグを読み込みました('+my.get('ver')+')※古いバージョン設定です')
         psl('変更点があるか確認し、必要に応じてコンフィグを更新します')
         config.read_dict(default_configs)
         config.read(CONF_PATH)
-        config.set('My', 'ver', str(ver))
+        config.set('My', 'ver', str(EXE_VER))
         save_config()
     else:
         psl('コンフィグを読み込みました('+my.get('ver')+')')
@@ -242,7 +239,9 @@ def url_post(request):
 
 
 # ### 対象選択・パス変換 ###
-def select_target_file(files_path=[], target_folder_path=""):
+def select_target_file(files_path=None, target_folder_path=""):
+    if files_path is None:
+        files_path = []
     if not target_folder_path == "":
         if os.path.isdir(target_folder_path) == bool(False):
             target_folder_path = ""
@@ -255,7 +254,9 @@ def select_target_file(files_path=[], target_folder_path=""):
     return files_path + [select_file_path]
 
 
-def select_target_files(files_path=[], target_folder_path=""):
+def select_target_files(files_path=None, target_folder_path=""):
+    if files_path is None:
+        files_path = []
     if not target_folder_path == "":
         if os.path.isdir(target_folder_path) == bool(False):
             target_folder_path = ""
@@ -353,30 +354,18 @@ def run_avi_utl_controller(target_file_path):
 
 
 # ### 実行ルーティン関係 ###
-def run_jlscp_auc(target_files_path, p_var, l_status):
+def run_jlscp_auc(target_files_path):
     total = len(target_files_path)
     start_f = datetime.datetime.now()
     notifire_encode_start("", 0, total)
-    p_count = 0
-    if tk_enable:
-        p_count = (total * 2 + 2)/100
-        tk_progress_add(p_var, p_count)
-        l_status.config(text="開始します...")
     for i, filepath in enumerate(target_files_path):
         filepath = file_rename(filepath)
         filename = os.path.splitext(os.path.basename(filepath))[0]
         if config.getboolean('Line', 'minimum') == bool(False):
             notifire_encode_start(filename, i+1, total)
         start = datetime.datetime.now()
-        if tk_enable:
-            tk_progress_add(p_var, p_count)
-            l_status.config(text=str(i+1) + "/" + str(total) + " JLS処理中 「" + filename + "」")
-        thr_jls = threading.Thread(target=run_join_logo_scp(filepath))
-        thr_jls.start()
+        run_join_logo_scp(filepath)
         avs_filepath = file_path2avs_path(filepath)
-        if tk_enable:
-            tk_progress_add(p_var, p_count)
-            l_status.config(text=str(i+1) + "/" + str(total) + " AUC処理中 「" + filename + "」")
         if avs_filepath == "":
             psl("avsパスが不正のため、当該ファイルの処理を中断します")
         else:
@@ -384,121 +373,221 @@ def run_jlscp_auc(target_files_path, p_var, l_status):
         if config.getboolean('Line', 'minimum') == bool(False):
             notifire_encode_end(i+1, total, start)
     notifire_encode_end(0, total, start_f)
-    if tk_enable:
-        tk_progress_add(p_var, p_count)
-        l_status.config(text="全" + str(total) + "処理完了")
 
 
 def run_files_dialog_and_run_jlscp_auc():
     files_path = select_target_files()
     if not files_path == "":
-        run_jlscp_auc(files_path, "", "")
+        run_jlscp_auc(files_path)
 
 
 # ### Tkinter関係 ###
-def tk_listbox_list_insert(lf, string_list):
-    for st in string_list:
-        lf.insert(lf.size(), st)
+class Application(tkinter.Frame):
+    def __init__(self, master):
+        super().__init__(master)
 
+        # Status宣言
+        self.frame_stat = tkinter.Frame(master)
+        self.tk_p_var = tkinter.IntVar(self.frame_stat)
+        self.tk_p_var.set(0)
+        self.progressbar = ttk.Progressbar(self.frame_stat, length=200, maximum=100, mode="determinate", variable=self.tk_p_var)
+        self.tk_l_status_var = tkinter.StringVar(self.frame_stat)
+        self.tk_l_status_var.set("初期化中...")
+        self.label_status = ttk.Label(self.frame_stat, padding=2, justify="left", relief="sunken", textvariable=self.tk_l_status_var)
+        self.tk_l_filecount = tkinter.StringVar(self.frame_stat)
+        self.tk_l_filecount.set("0ファイル")
+        self.label_filecount = ttk.Label(self.frame_stat, padding=2, justify="center", relief="sunken", textvariable=self.tk_l_filecount)
+        # ListBox宣言
+        self.frame_list = ttk.Frame(root)
+        self.listbox_files = Listbox(self.frame_list, bd=2, justify="left", relief="solid", cursor="hand2", selectmode="extended")
+        self.lf_scr_x = ttk.Scrollbar(self.frame_list, orient=HORIZONTAL, command=self.listbox_files.xview)
+        self.listbox_files.configure(xscrollcommand=self.lf_scr_x.set)
+        self.lf_scr_y = ttk.Scrollbar(self.frame_list, orient=VERTICAL, command=self.listbox_files.yview)
+        self.listbox_files.configure(yscrollcommand=self.lf_scr_y.set)
+        # Control宣言
+        self.frame_ctrl = ttk.Frame(master)
+        self.label_f_setting = ttk.LabelFrame(self.frame_ctrl, text='設定', relief="sunken", labelanchor="n")
+        self.button_line = ttk.Button(self.label_f_setting, text='Line Token設定', command=lambda: self.tk_line_token_window())
+        self.sep_setting_run = ttk.Separator(self.frame_ctrl, orient="horizontal")
+        self.label_f_run = ttk.LabelFrame(self.frame_ctrl, text='ファイル選択・実行', relief="sunken", labelanchor="n")
+        self.button_select = ttk.Button(self.label_f_run, text='ファイル選択', command=lambda: self.tk_select_files())
+        self.button_clear = ttk.Button(self.label_f_run, text='選択したファイルを除外', command=lambda: self.tk_files_list_select_clear())
+        self.button_clear_all = ttk.Button(self.label_f_run, text='全ファイルを除外', command=lambda: self.tk_files_list_all_clear())
+        self.button_run = ttk.Button(self.label_f_run, text='実行', command=lambda: self.tk_run_jlscp_auc())
+        self.tk_files_list_all_clear()
+        self.sep_run_open = ttk.Separator(self.frame_ctrl, orient="horizontal")
+        self.label_f_open = ttk.LabelFrame(self.frame_ctrl, text='エクスプローラで表示', relief="sunken", labelanchor="n")
+        self.button_open_root = ttk.Button(self.label_f_open, text='プログラムフォルダ表示', command=lambda: self.tk_open_folder(os.getcwd()))
+        self.button_open_result = ttk.Button(self.label_f_open, text='出力先フォルダ表示', command=lambda: self.tk_open_folder())
 
-def tk_filecount_update(count_label, files_list):
-    count_label.config(text=str(len(files_list)) + "ファイル")
+        # 配列＆表示
+        # Root内配置
+        self.frame_stat.pack(side=tkinter.BOTTOM, fill=tkinter.X, padx=1, pady=1)
+        self.frame_ctrl.pack(side=tkinter.LEFT, fill=tkinter.Y, padx=10, pady=50)
+        self.frame_list.pack(expand=True, side=tkinter.RIGHT, fill=tkinter.BOTH, padx=10, pady=10)
+        # Status内配置
+        self.label_filecount.pack(side=tkinter.RIGHT, padx=1)
+        self.progressbar.pack(side=tkinter.LEFT, padx=1)
+        self.label_status.pack(expand=True, side=tkinter.LEFT, fill=tkinter.X, padx=1)
+        # List内配置
+        self.lf_scr_x.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        self.lf_scr_y.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        self.listbox_files.pack(expand=True, side=tkinter.TOP, fill=tkinter.BOTH)
+        # Control内配置
+        set_ctrl_sep_pady = 5
+        set_ctrl_button_pady = 5
+        set_ctrl_button_ipady = 10
+        set_ctrl_label_f_pady = 5
+        set_ctrl_label_f_ipady = 5
+        self.label_f_setting.pack(fill=tkinter.X, pady=set_ctrl_label_f_pady, ipady=set_ctrl_label_f_ipady)
+        self.button_line.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.sep_setting_run.pack(fill=tkinter.BOTH, padx=3, pady=set_ctrl_sep_pady)
+        self.label_f_run.pack(fill=tkinter.X, pady=set_ctrl_label_f_pady, ipady=set_ctrl_label_f_ipady)
+        self.button_select.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_clear.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_clear_all.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_run.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.sep_run_open.pack(fill=tkinter.BOTH, padx=3, pady=set_ctrl_sep_pady, ipady=set_ctrl_button_ipady)
+        self.label_f_open.pack(fill=tkinter.X, pady=set_ctrl_label_f_pady, ipady=set_ctrl_label_f_ipady)
+        self.button_open_root.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_open_result.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
 
+        # 表示判定
+        if config.getboolean('Line', 'enable') == bool(True):
+            self.button_line.configure(state='disable')
 
-def tk_progress_add(progress_bar, int_val):
-    progress_bar.set(progress_bar.get() + int_val)
+        # 初期化完了
+        self.tk_l_status_var.set("初期化完了")
 
+    def tk_line_token_window(self):
+        self.tk_l_status_var.set("Line Token設定")
+        tkl_root = Tk()
+        tkl_root.title('Lineのトークンを入力してください')
+        # 文字入力欄
+        tkl_frame = ttk.Frame(tkl_root, padding=(75, 2))
+        tkl_frame.grid()
+        tkl_label = ttk.Label(tkl_frame, text='Token', padding=(5, 2))
+        tkl_label.grid(row=0, column=0, sticky=E)
+        token = StringVar()
+        # tkl_token_entry = ttk.Entry(tkl_frame, textvariable=token, width=75, show='*')
+        tkl_token_entry = ttk.Entry(tkl_frame, textvariable=token, width=75)
+        tkl_token_entry.grid(row=0, column=1)
+        # OK、キャンセルボタン欄
+        tkl_frame_b = ttk.Frame(tkl_frame, padding=(0, 5))
+        tkl_frame_b.grid(row=2, column=1, sticky=W)
+        tkl_button_ok = ttk.Button(tkl_frame_b, text='OK', command=lambda: self.tk_line_token_set(tkl_token_entry, tkl_button_ok))
+        tkl_button_ok.pack(side=LEFT)
+        tkl_button_close = ttk.Button(tkl_frame_b, text='閉じる', command=lambda: [self.tk_l_status_var.set("Line Token設定を閉じる"), tkl_root.destroy()])
+        tkl_button_close.pack(side=LEFT)
+        tkl_root.mainloop()
 
-def tk_progress_init(progress_bar):
-    progress_bar.set(0)
-
-
-def tk_line_token_window(tk_line_setting_button, l_status):
-    global line_token
-    l_status.config(text="Line Token設定")
-    tkl_root = Tk()
-    tkl_root.title('Lineのトークンを入力してください')
-    # 文字入力欄
-    tkl_frame = ttk.Frame(tkl_root, padding=(75, 2))
-    tkl_frame.grid()
-    tkl_label = ttk.Label(tkl_frame, text='Token', padding=(5, 2))
-    tkl_label.grid(row=0, column=0, sticky=E)
-    token = StringVar()
-    # tkl_token_entry = ttk.Entry(tkl_frame, textvariable=token, width=75, show='*')
-    tkl_token_entry = ttk.Entry(tkl_frame, textvariable=token, width=75)
-    tkl_token_entry.grid(row=0, column=1)
-    # OK、キャンセルボタン欄
-    tkl_frame_b = ttk.Frame(tkl_frame, padding=(0, 5))
-    tkl_frame_b.grid(row=2, column=1, sticky=W)
-    tkl_button_ok = ttk.Button(tkl_frame_b,
-                               text='OK',
-                               command=lambda: tk_line_token_set(tkl_token_entry, tkl_button_ok,
-                                                                 tk_line_setting_button, l_status))
-    tkl_button_ok.pack(side=LEFT)
-    tkl_button_close = ttk.Button(tkl_frame_b, text='閉じる', command=lambda: tkl_root.destroy())
-    tkl_button_close.pack(side=LEFT)
-    tkl_root.mainloop()
-
-
-def tk_line_token_set(tkl_entry, tkl_button, tk_button_line, l_status):
-    status = line_token_set(tkl_entry.get())
-    if status[0]:
-        tkl_entry.delete(0, END)
-        tkl_entry.insert(0, "設定完了しました。閉じてください。")
-        tkl_entry.configure(state='readonly')
-        tkl_button.configure(state='disable')
-        tk_button_line.configure(state='disable')
-        l_status.config(text="Line Token設定完了")
-    else:
-        tkl_entry.delete(0, END)
-        tkl_entry.insert(0, "テストに失敗しました。トークンを確認してください。")
-        tkl_entry.configure(state='normal')
-
-
-def tk_select_files(lf, l_status, l_count):
-    l_status.config(text="ファイル選択")
-    files = select_target_files()
-    tk_listbox_list_insert(lf, files)
-    tk_filecount_update(l_count, files)
-
-
-def tk_files_list_select_clear(lf, l_status, l_count):
-    l_status.config(text="選択項目をリストからクリア")
-    if not lf.curselection() is None:
-        filelist = list(lf.get(0, lf.size()-1))
-        if len(filelist) > 1:
-            for i, del_index in enumerate(lf.curselection()):
-                del_path = filelist.pop(del_index-i)
-                # print("del: " + str(del_index) + "|" + str(del_path))
-                lf.delete(0, tkinter.END)
-                tk_listbox_list_insert(lf, filelist)
+    def tk_line_token_set(self, tkl_entry, tkl_button):
+        status = line_token_set(tkl_entry.get())
+        if status[0]:
+            tkl_entry.delete(0, END)
+            tkl_entry.insert(0, "設定完了しました。閉じてください。")
+            tkl_entry.configure(state='readonly')
+            tkl_button.configure(state='disable')
+            self.button_line.configure(state='disable')
+            self.tk_l_status_var.set("Line Token設定完了")
         else:
-            filelist = []
-            lf.delete(0, tkinter.END)
-        tk_filecount_update(l_count, filelist)
+            tkl_entry.delete(0, END)
+            tkl_entry.insert(0, "テストに失敗しました。トークンを確認してください。")
+            tkl_entry.configure(state='normal')
 
-    
-def tk_files_list_all_clear(lf, l_status, l_count):
-    l_status.config(text="リストを全クリア")
-    lf.delete(0, tkinter.END)
-    tk_filecount_update(l_count, [])
+    def tk_listbox_list_insert(self, string_list):
+        for st in string_list:
+            self.listbox_files.insert(self.listbox_files.size(), st)
 
+    def tk_filecount_update(self, files_list):
+        self.tk_l_filecount.set(str(len(files_list)) + "ファイル")
 
-def tk_run_jlscp_auc(lf, p_var, l_status):
-    tk_progress_init(p_var)
-    run_jlscp_auc(list(lf.get(0, tkinter.END)), p_var, l_status)
+    def tk_progress_add(self, int_val):
+        self.tk_p_var.set(self.tk_p_var.get() + int_val)
 
+    def tk_progress_init(self):
+        self.tk_p_var.set(0)
 
-def tk_open_folder(folder_path=""):
-    if folder_path == "":
-        folder_path = str(os.path.dirname(config['Path']['join_logo_scp']))
-        folder_path += "/result"
-        folder_path = folder_path.replace('/', chr(ord('\\')))
-    if not os.path.isabs(folder_path):
-        folder_path = os.path.abspath(folder_path)
-    folder_path += chr(ord('\\'))
-    psl(folder_path)
-    os.system('explorer.exe "%s"' % folder_path)
+    def tk_select_files(self):
+        self.tk_l_status_var.set("ファイル選択")
+        files = select_target_files()
+        self.tk_listbox_list_insert(files)
+        self.tk_filecount_update(files)
+
+    def tk_files_list_select_clear(self):
+        self.tk_l_status_var.set("選択項目をリストからクリア")
+        if not self.listbox_files.curselection() is None:
+            filelist = list(self.listbox_files.get(0, tkinter.END))
+            if len(filelist) > 1:
+                for i, del_index in enumerate(self.listbox_files.curselection()):
+                    del_path = filelist.pop(del_index-i)
+                    # print("del: " + str(del_index) + "|" + str(del_path))
+                    self.listbox_files.delete(0, tkinter.END)
+                    self.tk_listbox_list_insert(filelist)
+            else:
+                filelist = []
+                self.listbox_files.delete(0, tkinter.END)
+            self.tk_filecount_update(filelist)
+
+    def tk_files_list_all_clear(self):
+        self.tk_l_status_var.set("リストを全クリア")
+        self.listbox_files.delete(0, tkinter.END)
+        self.tk_filecount_update([])
+
+    def tk_run_jlscp_auc(self):
+        target_files_path = list(self.listbox_files.get(0, tkinter.END))
+        self.tk_progress_init()
+        total = len(target_files_path)
+        start_f = datetime.datetime.now()
+        notifire_encode_start("", 0, total)
+        p_count = 100 / (total * 2 + 2)
+        self.tk_progress_add(p_count)
+        self.tk_l_status_var.set("開始します...")
+        for i, filepath in enumerate(target_files_path):
+            filepath = file_rename(filepath)
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            if config.getboolean('Line', 'minimum') == bool(False):
+                notifire_encode_start(filename, i + 1, total)
+            start = datetime.datetime.now()
+            self.tk_progress_add(p_count)
+            self.tk_l_status_var.set(str(i + 1) + "/" + str(total) + " JLS処理中 「" + filename + "」")
+            run_join_logo_scp(filepath)
+            avs_filepath = file_path2avs_path(filepath)
+            self.tk_progress_add(p_count)
+            self.tk_l_status_var.set(str(i + 1) + "/" + str(total) + " AUC処理中 「" + filename + "」")
+            if avs_filepath == "":
+                psl("avsパスが不正のため、当該ファイルの処理を中断します")
+            else:
+                run_avi_utl_controller(avs_filepath)
+            if config.getboolean('Line', 'minimum') == bool(False):
+                notifire_encode_end(i + 1, total, start)
+        notifire_encode_end(0, total, start_f)
+        self.tk_progress_add(100 - self.tk_p_var.get())
+        self.tk_l_status_var.set("全" + str(total) + "処理完了")
+
+    def tk_running(self):
+        if self.listbox_files.size() > 0:
+            self.button_clear.config(state="disable")
+            self.button_clear_all.config(state="disable")
+            self.button_run.config(state="disable")
+            self.tk_run_jlscp_auc()
+
+    def tk_finish(self):
+        self.button_clear.config(state="enable")
+        self.button_clear_all.config(state="enable")
+        self.button_run.config(state="enable")
+
+    @staticmethod
+    def tk_open_folder(folder_path=""):
+        if folder_path == "":
+            folder_path = str(os.path.dirname(config['Path']['join_logo_scp']))
+            folder_path += "/result"
+            folder_path = folder_path.replace('/', chr(ord('\\')))
+        if not os.path.isabs(folder_path):
+            folder_path = os.path.abspath(folder_path)
+        folder_path += chr(ord('\\'))
+        psl(folder_path)
+        os.system('explorer.exe "%s"' % folder_path)
 
 
 # ### メイン関係 ###
@@ -515,82 +604,13 @@ if __name__ == '__main__':
         # 宣言
         # Root宣言
         root = Tk()
-        root.title('pyJoinLogoScpEncode')
+        root.title(EXE_NAME_VER)
         root.iconbitmap('inc_dir/icon.ico')
         # root.rowconfigure("all", minsize=30, weight=1)
         # root.columnconfigure("all", minsize=50, weight=1)
-        root.geometry("800x800")
-        # Status宣言
-        frame_stat = tkinter.Frame(root)
-        progress_var = tkinter.IntVar(frame_stat)
-        progressbar = ttk.Progressbar(frame_stat, length=200, maximum=100, mode="determinate", variable=progress_var)
-        label_status = ttk.Label(frame_stat, padding=2, justify="left", relief="sunken", text="初期化中...")
-        label_filecount = ttk.Label(frame_stat, padding=2, justify="center", relief="sunken", text="0ファイル")
-        # ListBox宣言
-        frame_list = ttk.Frame(root)
-        listbox_files = Listbox(frame_list, bd=2, justify="left", relief="solid", cursor="hand2", selectmode="extended")
-        lf_scr_x = ttk.Scrollbar(frame_list, orient=HORIZONTAL, command=listbox_files.xview)
-        listbox_files.configure(xscrollcommand=lf_scr_x.set)
-        lf_scr_y = ttk.Scrollbar(frame_list, orient=VERTICAL, command=listbox_files.yview)
-        listbox_files.configure(yscrollcommand=lf_scr_y.set)
-        # Control宣言
-        frame_ctrl = ttk.Frame(root)
-        label_setting = ttk.Label(frame_ctrl, text='設定')
-        button_line = ttk.Button(frame_ctrl, text='Line Token設定',
-                                 command=lambda: tk_line_token_window(button_line, label_status))
-        sep_setting_run = ttk.Separator(frame_ctrl, orient="horizontal")
-        label_run = ttk.Label(frame_ctrl, text='ファイル選択・実行')
-        button_select = ttk.Button(frame_ctrl, text='ファイル選択',
-                                   command=lambda: tk_select_files(listbox_files, label_status, label_filecount))
-        button_clear = ttk.Button(frame_ctrl, text='選択したファイルを除外',
-                                  command=lambda: tk_files_list_select_clear(listbox_files, label_status,
-                                                                             label_filecount))
-        button_clear_all = ttk.Button(frame_ctrl, text='全ファイルを除外',
-                                      command=lambda: tk_files_list_all_clear(listbox_files, label_status,
-                                                                              label_filecount))
-        button_run = ttk.Button(frame_ctrl, text='実行',
-                                command=lambda: tk_run_jlscp_auc(listbox_files, progress_var, label_status))
-        sep_run_open = ttk.Separator(frame_ctrl, orient="horizontal")
-        label_open = ttk.Label(frame_ctrl, text='エクスプローラで表示')
-        button_open_root = ttk.Button(frame_ctrl, text='プログラムフォルダ表示',
-                                      command=lambda: tk_open_folder(os.getcwd()))
-        button_open_result = ttk.Button(frame_ctrl, text='出力先フォルダ表示', command=lambda: tk_open_folder())
-
-        # 配列＆表示
-        # Root内配置
-        frame_stat.pack(side=tkinter.BOTTOM, fill=tkinter.X, padx=1, pady=1)
-        frame_ctrl.pack(side=tkinter.LEFT, fill=tkinter.Y, padx=10, pady=50)
-        frame_list.pack(expand=True, side=tkinter.RIGHT, fill=tkinter.BOTH, padx=10, pady=10)
-        # Status内配置
-        label_filecount.pack(side=tkinter.RIGHT, padx=1)
-        progressbar.pack(side=tkinter.LEFT, padx=1)
-        label_status.pack(expand=True, side=tkinter.LEFT, fill=tkinter.X, padx=1)
-        # List内配置
-        lf_scr_x.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        lf_scr_y.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-        listbox_files.pack(expand=True, side=tkinter.TOP, fill=tkinter.BOTH)
-        # Control内配置
-        set_ctrl_sep_pady = 10
-        set_ctrl_button_pady = 5
-        set_ctrl_button_ipady = 10
-        label_setting.pack(pady=5)
-        button_line.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        sep_setting_run.pack(fill=tkinter.BOTH, padx=3, pady=set_ctrl_sep_pady)
-        label_run.pack(pady=5)
-        button_select.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        button_clear.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        button_clear_all.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        button_run.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        sep_run_open.pack(fill=tkinter.BOTH, padx=3, pady=set_ctrl_sep_pady, ipady=set_ctrl_button_ipady)
-        label_open.pack(pady=5)
-        button_open_root.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-        button_open_result.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
-
-        # 表示判定
-        if config.getboolean('Line', 'enable') == bool(True):
-            button_line.configure(state='disable')
-
-        root.mainloop()
+        root.geometry("800x700")
+        app = Application(master=root)
+        app.mainloop()
     else:
         psl("引数あり")
         run_files_dialog_and_run_jlscp_auc()

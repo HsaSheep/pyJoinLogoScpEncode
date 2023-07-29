@@ -39,8 +39,8 @@
 * 通知の送信先は「1:1でLineNotifyから通知を受け取る」を選択してください。
 * トークンは1度しか表示されません。何らかの理由で紛失した場合は削除、再作成してください。
 #### 設定方法
-* Line Token設定をクリックします。　　　　　　　　　　　　　　　　　　　　　
-　![main_window.png](img%2Fmain_window.png)
+* Line Token設定をクリックします。
+　![main_window0.2.png](img%2Fmain_window0.2.png)
 * Tokenを入力(Ctrl+Vで貼り付けも可)し、OKをクリック。その後閉じてください。
 　![line_token_window.png](img%2Fline_token_window.png)
 * 一度設定すると、再度開くことはできません。下記を参考に手動でconfig.iniを編集してください。
