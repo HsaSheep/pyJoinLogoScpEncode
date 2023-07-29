@@ -166,9 +166,9 @@ def path_check():
     if is_ok == bool(True):
         psl("パスのチェック完了。")
         save_config()
+        return bool(True)
     else:
-        print("パスのチェックに失敗しました。終了します")
-        exit()
+        return bool(False)
 
 
 # ### 処理状況通知関係 ###
@@ -429,7 +429,8 @@ class Application(tkinter.Frame):
         # Control宣言
         self.frame_ctrl = ttk.Frame(master)
         self.label_f_setting = ttk.LabelFrame(self.frame_ctrl, text='設定', relief="sunken", labelanchor="n")
-        self.button_line = ttk.Button(self.label_f_setting, text='Line Token設定', command=lambda: self.tk_line_token_window())
+        self.button_line_setting = ttk.Button(self.label_f_setting, text='Line Token設定', command=lambda: self.tk_line_token_window())
+        self.button_conf_setting = ttk.Button(self.label_f_setting, text='動作設定', command=lambda: self.tk_line_token_window())
         self.sep_setting_run = ttk.Separator(self.frame_ctrl, orient="horizontal")
         self.label_f_run = ttk.LabelFrame(self.frame_ctrl, text='ファイル選択・実行', relief="sunken", labelanchor="n")
         self.button_select = ttk.Button(self.label_f_run, text='ファイル選択', command=lambda: self.tk_select_files())
@@ -462,7 +463,8 @@ class Application(tkinter.Frame):
         set_ctrl_label_f_pady = 5
         set_ctrl_label_f_ipady = 5
         self.label_f_setting.pack(fill=tkinter.X, pady=set_ctrl_label_f_pady, ipady=set_ctrl_label_f_ipady)
-        self.button_line.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_line_setting.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
+        self.button_conf_setting.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
         self.sep_setting_run.pack(fill=tkinter.BOTH, padx=3, pady=set_ctrl_sep_pady)
         self.label_f_run.pack(fill=tkinter.X, pady=set_ctrl_label_f_pady, ipady=set_ctrl_label_f_ipady)
         self.button_select.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
@@ -476,7 +478,10 @@ class Application(tkinter.Frame):
 
         # 表示判定
         if config.getboolean('Line', 'enable') == bool(True):
-            self.button_line.configure(state='disable')
+            self.button_line_setting.configure(state='disable')
+        # 未実装のため無効化(画面調整のため追加したもの)
+        self.button_conf_setting.configure(text="動作設定\n※未実装")
+        self.button_conf_setting.configure(state='disable')
 
         # スレッド宣言
         self.thread_run_jls_auc_for_tk = threading.Thread(target=self.run_jlscp_auc_for_tk, daemon=True)
@@ -514,7 +519,7 @@ class Application(tkinter.Frame):
             tkl_entry.insert(0, "設定完了しました。閉じてください。")
             tkl_entry.configure(state='readonly')
             tkl_button.configure(state='disable')
-            self.button_line.configure(state='disable')
+            self.button_line_setting.configure(state='disable')
             self.tk_l_status_var.set("Line Token設定完了")
         else:
             tkl_entry.delete(0, END)
@@ -636,7 +641,10 @@ class Application(tkinter.Frame):
 # Todo: tkinter コンフィグ表示
 if __name__ == '__main__':
     config_check()
-    path_check()
+    path_check_state = path_check()
+    if not path_check_state:
+        print("パスのチェックに失敗しました。終了します")
+        exit()
     # line_notifire_test()
     # ### 引数があるか確認
     argvs = sys.argv
@@ -650,7 +658,7 @@ if __name__ == '__main__':
         root.iconbitmap('inc_dir/icon.ico')
         # root.rowconfigure("all", minsize=30, weight=1)
         # root.columnconfigure("all", minsize=50, weight=1)
-        root.geometry("800x700")
+        root.geometry("800x750")
         app = Application(master=root)
         app.mainloop()
     else:
