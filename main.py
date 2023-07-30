@@ -68,21 +68,16 @@ def config_save():
 
 def config_read_key(section="", key=""):
     result = [bool(False), ""]
-    if (section == "") and (key == ""):
+    if not ((section == "") and (key == "")):
         if config_key_define_check(section, key):
             result[0] = bool(True)
             result[1] = config.get(section, key)
     return result
 
 
-def config_read_key_str(section="", key=""):
-    result = config_read_key(section, key)
-    return result[1]
-
-
 def config_write_key(section="", key="", val=""):
     result = bool(False)
-    if (section == "") and (key == ""):
+    if not((section == "") and (key == "")):
         if config_key_define_check(section, key):
             result = bool(True)
             config.set(section, key, val)
@@ -512,11 +507,11 @@ class Application(tkinter.Frame):
         self.button_open_result.pack(fill=tkinter.X, pady=set_ctrl_button_pady, ipady=set_ctrl_button_ipady)
 
         # 表示判定
-        if config.getboolean('Line', 'enable') == bool(True):
+        if not (config_read_key('Line', 'token')[1] == "0"):
             self.button_line_setting.configure(state='disable')
-        # 未実装のため無効化(画面調整のため追加したもの)
-        self.button_conf_setting.configure(text="動作設定\n※未実装")
-        #self.button_conf_setting.configure(state='disable')
+        if not path_check():
+            self.button_select.configure(state='disable')
+            self.button_open_result.configure(state='disable')
 
         # スレッド宣言
         self.thread_run_jls_auc_for_tk = threading.Thread(target=self.run_jlscp_auc_for_tk, daemon=True)
@@ -539,46 +534,59 @@ class Application(tkinter.Frame):
         tkc_frame_p_num = ttk.Frame(tkc_frame)
         tkc_label_p_num = ttk.Label(tkc_frame_p_num, text="AviUtl出力プラグインNo.")
         tkc_label_p_num.pack(side=tkinter.LEFT, padx=10)
-        tkc_entry_p_num = ttk.Entry(tkc_frame_p_num, textvariable=self.tkc_plugin_num, width=5)
+        tkc_entry_p_num = ttk.Entry(tkc_frame_p_num, justify=tkinter.RIGHT, textvariable=self.tkc_plugin_num, width=5)
         tkc_entry_p_num.pack(after=tkc_label_p_num, side=tkinter.LEFT)
+        # Rename関係
+        tkc_frame_rename = ttk.Frame(tkc_frame)
+        tck_label_mp4_date = ttk.Label(tkc_frame_rename, text=".mp4名から年月日を削除(YYYY年M月D日など)")
+        tck_label_mp4_date.grid(row=0, column=0, padx=10, pady=5)
+        tkc_button_mp4_date_enable = ttk.Button(tkc_frame_rename, text="有効", command=lambda: [config_write_key("Rename", "mp4_filename_date_delete", str(bool(True))), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_mp4_date_enable.grid(row=0, column=1)
+        tkc_button_mp4_date_disable = ttk.Button(tkc_frame_rename, text="無効", command=lambda: [config_write_key("Rename", "mp4_filename_date_delete", str(bool(False))), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_mp4_date_disable.grid(row=0, column=2)
+        # Line通知設定
+        tkc_frame_line = ttk.Frame(tkc_frame)
+        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知")
+        tck_label_line_enable.grid(row=0, column=0, padx=10, pady=5)
+        tkc_button_line_enable = ttk.Button(tkc_frame_line, text="有効", command=lambda: [line_enable(bool(True)), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_line_enable.grid(row=0, column=1)
+        tkc_button_line_disable = ttk.Button(tkc_frame_line, text="無効", command=lambda: [line_enable(bool(False)), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_line_disable.grid(row=0, column=2)
+        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知量")
+        tck_label_line_enable.grid(row=1, column=0, padx=10, pady=5)
+        tkc_button_line_minimum_enable = ttk.Button(tkc_frame_line, text="最小", command=lambda: [line_minimum(bool(True)), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_line_minimum_enable.grid(row=1, column=1)
+        tkc_button_line_minimum_disable = ttk.Button(tkc_frame_line, text="通常", command=lambda: [line_minimum(bool(False)), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
+        tkc_button_line_minimum_disable.grid(row=1, column=2)
+        # Save And Read config
+        tkc_frame_config = ttk.Frame(tkc_frame)
+        tkc_button_config_read = ttk.Button(tkc_frame_config, text="設定ファイルから読み込み", command=lambda: self.tk_config_read(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable))
+        tkc_button_config_read.pack(expand=True, side=tkinter.LEFT, padx=10)
+        tkc_button_config_save = ttk.Button(tkc_frame_config, text=" 設定ファイルに保存 ", command=lambda: self.tk_config_save())
+        tkc_button_config_save.pack(expand=True, side=tkinter.LEFT, padx=10)
+        # ### Save関係ない設定関係
+        # セパレータ、上記についての注意事項
+        tkc_frame_only = ttk.Frame(tkc_frame)
+        tkc_sep_only = ttk.Separator(tkc_frame_only, orient="horizontal")
+        tkc_sep_only.pack(side=tkinter.TOP, fill=tkinter.X, pady=10)
+        tkc_label_only_wng = ttk.Label(tkc_frame_only, text="※↓ 即反映、設定値がリロードされます ↓")
+        tkc_label_only_wng.pack(after=tkc_sep_only)
         # Path
         tkc_frame_path = ttk.Frame(tkc_frame)
         tkc_label_path = ttk.Label(tkc_frame_path, text="Pathチェック(チェック失敗の場合設定表示)")
         tkc_label_path.pack(side=tkinter.LEFT, padx=10)
-        tkc_button_path_check = ttk.Button(tkc_frame_path, text="実行", command=path_check())
+        tkc_button_path_check = ttk.Button(tkc_frame_path, text="実行", command=lambda: [path_check(), self.tk_config_update(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)])
         tkc_button_path_check.pack(after=tkc_label_path, side=tkinter.LEFT, padx=10)
-        # Line通知設定
-        tkc_frame_line = ttk.Frame(tkc_frame)
-        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知")
-        tck_label_line_enable.grid(column=0, row=0, padx=10, pady=5)
-        tkc_button_line_enable = ttk.Button(tkc_frame_line, text="有効", command=line_enable(bool(True)))
-        tkc_button_line_enable.grid(row=0, column=1)
-        tkc_button_line_disable = ttk.Button(tkc_frame_line, text="無効", command=line_enable(bool(False)))
-        tkc_button_line_disable.grid(row=0, column=2)
-        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知量")
-        tck_label_line_enable.grid(row=1, column=0, padx=10, pady=5)
-        tkc_button_line_minimum_enable = ttk.Button(tkc_frame_line, text="最小", command=line_minimum(bool(True)))
-        tkc_button_line_minimum_enable.grid(row=1, column=1)
-        tkc_button_line_minimum_disable = ttk.Button(tkc_frame_line, text="通常", command=line_enable(bool(False)))
-        tkc_button_line_minimum_disable.grid(row=1, column=2)
-        # Save And Read config
-        tkc_frame_config = ttk.Frame(tkc_frame)
-        tkc_button_config_read = ttk.Button(tkc_frame_config, text="設定ファイルから読み込み")
-        tkc_button_config_read.pack(side=tkinter.LEFT, padx=10)
-        tkc_button_config_save = ttk.Button(tkc_frame_config, text=" 設定ファイルに保存 ")
-        tkc_button_config_save.pack(side=tkinter.LEFT, padx=10)
         # Tk Config Root
         tkc_frame_p_num.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
-        tkc_frame_path.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_rename.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
         tkc_frame_line.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
-        tkc_frame_config.pack(expand=True, side=tkinter.BOTTOM, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_config.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_only.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_path.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
         # 設定を反映
-        self.tk_config_read()
-
-    def tk_config_read(self):
-        config_read()
-        psl(str(config_read_key('Auc', 'enc_plugin_no')[0]))
-        self.tkc_plugin_num.set(config_read_key_str('Auc', 'enc_plugin_no'))
+        self.tk_config_read(tkc_button_mp4_date_enable, tkc_button_mp4_date_disable, tkc_button_line_enable, tkc_button_line_disable, tkc_button_line_minimum_enable, tkc_button_line_minimum_disable)
+        tkc_root.mainloop()
 
     def tk_line_token_window(self):
         self.tk_l_status_var.set("Line Token設定")
@@ -617,6 +625,54 @@ class Application(tkinter.Frame):
             tkl_entry.insert(0, "テストに失敗しました。トークンを確認してください。")
             tkl_entry.configure(state='normal')
 
+    def tk_config_update(self, mp4_date_e, mp4_date_d, line_e, line_d, line_min, line_nor):
+        # 数値更新
+        self.tkc_plugin_num.set(config_read_key('Auc', 'enc_plugin_no')[1])
+        # メインウィンドウの状態更新
+        if not path_check():
+            self.button_select.configure(state='disable')
+            self.button_open_result.configure(state='disable')
+        else:
+            self.button_select.configure(state='enable')
+            self.button_open_result.configure(state='enable')
+        if config_read_key('Line', 'token')[1] == "0":
+            self.button_line_setting.configure(state="enable")
+        else:
+            self.button_line_setting.configure(state="disable")
+        # ボタン状態更新
+        if config_read_key('Rename', 'mp4_filename_date_delete')[1] == str(bool(True)):
+            mp4_date_e.configure(state="disable")
+            mp4_date_d.configure(state="enable")
+        else:
+            mp4_date_e.configure(state="enable")
+            mp4_date_d.configure(state="disable")
+        if config_read_key('Line', 'enable')[1] == str(bool(True)):
+            line_e.configure(state="disable")
+            line_d.configure(state="enable")
+        else:
+            line_d.configure(state="disable")
+            if config_read_key('Line', 'token')[1] == "0":
+                line_e.configure(state="disable")
+            else:
+                line_e.configure(state="enable")
+        if config_read_key('Line', 'minimum')[1] == str(bool(True)):
+            line_min.configure(state="disable")
+            line_nor.configure(state="enable")
+        else:
+            line_nor.configure(state="disable")
+            if config_read_key('Line', 'token')[1] == "0":
+                line_min.configure(state="disable")
+            else:
+                line_min.configure(state="enable")
+
+    def tk_config_read(self, mp4_date_e, mp4_date_d, line_e, line_d, line_min, line_nor):
+        config_read()
+        self.tk_config_update(mp4_date_e, mp4_date_d, line_e, line_d, line_min, line_nor)
+
+    def tk_config_save(self):
+        config_write_key('Auc', 'enc_plugin_no', self.tkc_plugin_num.get())
+        config_save()
+
     def tk_listbox_list_insert(self, string_list):
         for st in string_list:
             self.listbox_files.insert(self.listbox_files.size(), st)
@@ -651,7 +707,7 @@ class Application(tkinter.Frame):
             filelist = list(self.listbox_files.get(0, tkinter.END))
             if len(filelist) > 1:
                 for i, del_index in enumerate(self.listbox_files.curselection()):
-                    del_path = filelist.pop(del_index-i)
+                    # del_path = filelist.pop(del_index-i)
                     # print("del: " + str(del_index) + "|" + str(del_path))
                     self.listbox_files.delete(0, tkinter.END)
                     self.tk_listbox_list_insert(filelist)
@@ -729,14 +785,8 @@ class Application(tkinter.Frame):
 
 
 # ### メイン関係 ###
-# Todo: tkinter コンフィグ表示
 if __name__ == '__main__':
     config_check()
-    path_check_state = path_check()
-    if not path_check_state:
-        print("パスのチェックに失敗しました。終了します")
-        exit()
-    # line_notifire_test()
     # ### 引数があるか確認
     argvs = sys.argv
     argc = len(argvs)
@@ -757,4 +807,8 @@ if __name__ == '__main__':
         app.mainloop()
     else:
         psl("引数あり")
+        if not path_check():
+            print("パスのチェックに失敗しました。終了します")
+            exit()
+        # line_notifire_test()
         run_files_dialog_and_run_jlscp_auc()
