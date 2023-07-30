@@ -54,7 +54,11 @@ default_configs = {
 
 
 # ### コンフィグ・パス・ログ関係 ###
-def save_config():
+def config_read():
+    config.read(CONF_PATH)
+
+
+def config_save():
     psl('設定ファイルを保存します(' + CONF_PATH + ')')
     if not os.path.isdir(os.path.dirname(CONF_PATH)):
         os.makedirs(os.path.dirname(CONF_PATH))
@@ -62,24 +66,27 @@ def save_config():
         config.write(conf_file)
 
 
-def save_log(log_message, file_name=LOG_FILENAME):
-    if not os.path.isdir(LOG_FOLDER):
-        os.makedirs(LOG_FOLDER)
-    with open(LOG_FOLDER+file_name, 'a', encoding='utf-8') as f:
-        f.write(str(log_message)+"\n")
+def config_read_key(section="", key=""):
+    result = [bool(False), ""]
+    if (section == "") and (key == ""):
+        if config_key_define_check(section, key):
+            result[0] = bool(True)
+            result[1] = config.get(section, key)
+    return result
 
 
-def psl(message, log_file_name=""):
-    print(message)
-    if log_file_name == "":
-        save_log(message)
-    else:
-        save_log(message, log_file_name)
+def config_read_key_str(section="", key=""):
+    result = config_read_key(section, key)
+    return result[1]
 
 
-def p_time(start, end):
-    diff_s = str(end - start)
-    return diff_s[:diff_s.find('.')]
+def config_write_key(section="", key="", val=""):
+    result = bool(False)
+    if (section == "") and (key == ""):
+        if config_key_define_check(section, key):
+            result = bool(True)
+            config.set(section, key, val)
+    return result
 
 
 def config_plugin_no(number=str(0)):
@@ -87,7 +94,7 @@ def config_plugin_no(number=str(0)):
         config.set('Auc', 'enc_plugin_no', number)
         psl("出力プラグインを設定: " + config.get('Auc', 'enc_plugin_no'))
     else:
-        psl("出力プラグインは整数を入力してください。現在値: " + config.get('Auc', 'enc_plugin_no'))
+        psl("出力プラグインは整数を入力してください。入力： " + number + " 現在値: " + config.get('Auc', 'enc_plugin_no'))
 
 
 def config_key_define_check(section="", key=""):
@@ -115,13 +122,13 @@ def config_check():
     else:
         psl('コンフィグファイルがありません-> 作成します')
         config.read_dict(default_configs)
-        save_config()
+        config_save()
     config.read(CONF_PATH)
     my = config['My']
     if my.getboolean('enable') == bool(False):
         psl('初期値で作成します。')
         config.set('My', 'enable', str(bool(True)))
-        save_config()
+        config_save()
     elif my.getfloat('ver') < EXE_VER:
         psl('コンフィグを読み込みました('+my.get('ver')+')※古いバージョン設定です')
         psl('変更点があるか確認し、必要に応じてコンフィグを更新します')
@@ -131,7 +138,7 @@ def config_check():
         # 変更チェック->書き換え部分
         config_key_update('Rename', 'date_delete', 'mp4_filename_date_delete')
         config_key_update('Line', 'key', 'token')
-        save_config()
+        config_save()
     else:
         psl('コンフィグを読み込みました('+my.get('ver')+')')
 
@@ -165,10 +172,30 @@ def path_check():
         is_ok = bool(False)
     if is_ok == bool(True):
         psl("パスのチェック完了。")
-        save_config()
+        config_save()
         return bool(True)
     else:
         return bool(False)
+
+
+def save_log(log_message, file_name=LOG_FILENAME):
+    if not os.path.isdir(LOG_FOLDER):
+        os.makedirs(LOG_FOLDER)
+    with open(LOG_FOLDER + file_name, 'a', encoding='utf-8') as f:
+        f.write(str(log_message) + "\n")
+
+
+def psl(message, log_file_name=""):
+    print(message)
+    if log_file_name == "":
+        save_log(message)
+    else:
+        save_log(message, log_file_name)
+
+
+def p_time(start, end):
+    diff_s = str(end - start)
+    return diff_s[:diff_s.find('.')]
 
 
 # ### 処理状況通知関係 ###
@@ -200,6 +227,14 @@ def notifire_encode_end(count=1, total=1, start=DATE_TIME, end=DATE_TIME):
 
 
 # ### LINE通知関係 ###
+def line_enable(statu=bool(False)):
+    config.set('Line', 'enable', str(statu))
+
+
+def line_minimum(statu=bool(False)):
+    config.set('Line', 'minimum', str(statu))
+
+
 def line_token_set(token):
     if len(token) > 2:
         config.set('Line', 'token', str(token))
@@ -216,7 +251,7 @@ def line_notifire_test():
         psl('Line通知失敗-> 無効化します(トークンが正しいか確認してください)')
         config.set('Line', 'enable', str(bool(False)))
         # config.set('line', 'token', str()) # 消すと戻せなくなるので一応そのままにすることに
-    save_config()
+    config_save()
     return status
 
 
@@ -430,7 +465,7 @@ class Application(tkinter.Frame):
         self.frame_ctrl = ttk.Frame(master)
         self.label_f_setting = ttk.LabelFrame(self.frame_ctrl, text='設定', relief="sunken", labelanchor="n")
         self.button_line_setting = ttk.Button(self.label_f_setting, text='Line Token設定', command=lambda: self.tk_line_token_window())
-        self.button_conf_setting = ttk.Button(self.label_f_setting, text='動作設定', command=lambda: self.tk_line_token_window())
+        self.button_conf_setting = ttk.Button(self.label_f_setting, text='動作設定', command=lambda: self.tk_config_setting_window())
         self.sep_setting_run = ttk.Separator(self.frame_ctrl, orient="horizontal")
         self.label_f_run = ttk.LabelFrame(self.frame_ctrl, text='ファイル選択・実行', relief="sunken", labelanchor="n")
         self.button_select = ttk.Button(self.label_f_run, text='ファイル選択', command=lambda: self.tk_select_files())
@@ -481,19 +516,75 @@ class Application(tkinter.Frame):
             self.button_line_setting.configure(state='disable')
         # 未実装のため無効化(画面調整のため追加したもの)
         self.button_conf_setting.configure(text="動作設定\n※未実装")
-        self.button_conf_setting.configure(state='disable')
+        #self.button_conf_setting.configure(state='disable')
 
         # スレッド宣言
         self.thread_run_jls_auc_for_tk = threading.Thread(target=self.run_jlscp_auc_for_tk, daemon=True)
         self.thread_run_jls_auc_for_tk_finish_check = threading.Thread(target=self.run_jlscp_auc_for_tk_finish_check, daemon=True)
 
+        # member用変数宣言
+        self.tkc_plugin_num = StringVar()
+
         # 初期化完了
         self.tk_l_status_var.set("初期化完了")
+
+    def tk_config_setting_window(self):
+        self.tk_l_status_var.set("動作設定")
+        tkc_root = Toplevel()
+        tkc_root.title('動作設定')
+        tkc_root.minsize(250, 150)
+        tkc_frame = ttk.Frame(tkc_root)
+        tkc_frame.pack(side=tkinter.TOP, fill=tkinter.BOTH)
+        # Plugin_no
+        tkc_frame_p_num = ttk.Frame(tkc_frame)
+        tkc_label_p_num = ttk.Label(tkc_frame_p_num, text="AviUtl出力プラグインNo.")
+        tkc_label_p_num.pack(side=tkinter.LEFT, padx=10)
+        tkc_entry_p_num = ttk.Entry(tkc_frame_p_num, textvariable=self.tkc_plugin_num, width=5)
+        tkc_entry_p_num.pack(after=tkc_label_p_num, side=tkinter.LEFT)
+        # Path
+        tkc_frame_path = ttk.Frame(tkc_frame)
+        tkc_label_path = ttk.Label(tkc_frame_path, text="Pathチェック(チェック失敗の場合設定表示)")
+        tkc_label_path.pack(side=tkinter.LEFT, padx=10)
+        tkc_button_path_check = ttk.Button(tkc_frame_path, text="実行", command=path_check())
+        tkc_button_path_check.pack(after=tkc_label_path, side=tkinter.LEFT, padx=10)
+        # Line通知設定
+        tkc_frame_line = ttk.Frame(tkc_frame)
+        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知")
+        tck_label_line_enable.grid(column=0, row=0, padx=10, pady=5)
+        tkc_button_line_enable = ttk.Button(tkc_frame_line, text="有効", command=line_enable(bool(True)))
+        tkc_button_line_enable.grid(row=0, column=1)
+        tkc_button_line_disable = ttk.Button(tkc_frame_line, text="無効", command=line_enable(bool(False)))
+        tkc_button_line_disable.grid(row=0, column=2)
+        tck_label_line_enable = ttk.Label(tkc_frame_line, text="Line通知量")
+        tck_label_line_enable.grid(row=1, column=0, padx=10, pady=5)
+        tkc_button_line_minimum_enable = ttk.Button(tkc_frame_line, text="最小", command=line_minimum(bool(True)))
+        tkc_button_line_minimum_enable.grid(row=1, column=1)
+        tkc_button_line_minimum_disable = ttk.Button(tkc_frame_line, text="通常", command=line_enable(bool(False)))
+        tkc_button_line_minimum_disable.grid(row=1, column=2)
+        # Save And Read config
+        tkc_frame_config = ttk.Frame(tkc_frame)
+        tkc_button_config_read = ttk.Button(tkc_frame_config, text="設定ファイルから読み込み")
+        tkc_button_config_read.pack(side=tkinter.LEFT, padx=10)
+        tkc_button_config_save = ttk.Button(tkc_frame_config, text=" 設定ファイルに保存 ")
+        tkc_button_config_save.pack(side=tkinter.LEFT, padx=10)
+        # Tk Config Root
+        tkc_frame_p_num.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_path.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_line.pack(expand=True, side=tkinter.TOP, fill=tkinter.X, padx=10, pady=5)
+        tkc_frame_config.pack(expand=True, side=tkinter.BOTTOM, fill=tkinter.X, padx=10, pady=5)
+        # 設定を反映
+        self.tk_config_read()
+
+    def tk_config_read(self):
+        config_read()
+        psl(str(config_read_key('Auc', 'enc_plugin_no')[0]))
+        self.tkc_plugin_num.set(config_read_key_str('Auc', 'enc_plugin_no'))
 
     def tk_line_token_window(self):
         self.tk_l_status_var.set("Line Token設定")
         tkl_root = Toplevel()
         tkl_root.title('Lineのトークンを入力してください')
+        tkl_root.resizable(False, False)
         # 文字入力欄
         tkl_frame = ttk.Frame(tkl_root, padding=(75, 2))
         tkl_frame.grid()
@@ -658,7 +749,10 @@ if __name__ == '__main__':
         root.iconbitmap('inc_dir/icon.ico')
         # root.rowconfigure("all", minsize=30, weight=1)
         # root.columnconfigure("all", minsize=50, weight=1)
-        root.geometry("800x750")
+        root_min_size = [800, 750]
+        root_padding = "+50+50"
+        root.geometry(str(root_min_size[0]) + "x" + str(root_min_size[1]) + root_padding)
+        root.minsize(root_min_size[0], root_min_size[1])
         app = Application(master=root)
         app.mainloop()
     else:
